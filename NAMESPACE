@@ -1,0 +1,8 @@
+export(mgmixirt)
+export(sim_mgmixirt)
+S3method(print, mgmixirt)
+S3method(logLik, mgmixirt)
+S3method(coef, mgmixirt)
+S3method(summary, mgmixirt)
+S3method(print, summary.mgmixirt)
+importFrom(stats, plogis, qlogis, rbinom, rnorm, nlminb, sd, AIC, BIC)

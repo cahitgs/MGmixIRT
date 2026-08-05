@@ -1,0 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+scratch/
+*.log
+/Meta/
+/doc/
+inst/doc
+*.dgm
+*.gh5
+*_results.dat
