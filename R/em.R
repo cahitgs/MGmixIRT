@@ -48,34 +48,112 @@ q_resp <- function(eta, cN1, cN) {
   sum(cN1 * log_p_logis(eta) + n0 * log_q_logis(eta))
 }
 
+## Vectorised damped-Newton update of (a_i, b_i) for all items whose
+## linear predictor depends on them alone (all items for HYBRID/MPDM;
+## pre-switch items for the 2PDM). Per-item 2x2 Newton systems are solved
+## simultaneously; items whose expected complete-data log-likelihood would
+## decrease get their step halved individually.
+newton_items <- function(par, spec, stats, sweeps = 4L) {
+  I <- spec$I; G <- spec$G
+  ok <- if (spec$model == "2pdm")
+    seq_len(I) <= spec$i0 else rep(TRUE, I)
+  covs <- masks <- vector("list", G)
+  for (g in seq_len(G)) {
+    cl <- stats[[g]]$cl
+    C <- length(cl$delta)
+    A <- outer(seq_len(I), cl$delta, ">")
+    TH <- matrix(cl$theta, I, C, byrow = TRUE)
+    if (spec$model == "mpdm") {
+      TH <- TH - exp(par$logkappa[g]) * A *
+        matrix(spec$I - cl$delta, I, C, byrow = TRUE)
+      M <- matrix(1, I, C)
+    } else if (spec$model == "hybrid") {
+      M <- 1 - A
+    } else {
+      M <- matrix(1, I, C)
+    }
+    covs[[g]] <- TH; masks[[g]] <- M
+  }
+  qitems <- function(a, b) {
+    p2 <- par; p2$a <- a; p2$b <- b
+    Q <- numeric(I)
+    for (g in seq_len(G)) {
+      eta <- eta_g(p2, spec, g, stats[[g]]$cl)
+      N1 <- stats[[g]]$cN1
+      N0 <- matrix(stats[[g]]$cN, I, ncol(eta), byrow = TRUE) - N1
+      Q <- Q + rowSums(N1 * log_p_logis(eta) + N0 * log_q_logis(eta))
+    }
+    Q
+  }
+  a <- par$a; b <- par$b
+  Qcur <- qitems(a, b)
+  for (sw in seq_len(sweeps)) {
+    ga <- gb <- haa <- hab <- hbb <- numeric(I)
+    p2 <- par; p2$a <- a; p2$b <- b
+    for (g in seq_len(G)) {
+      eta <- eta_g(p2, spec, g, stats[[g]]$cl)
+      P <- plogis(eta)
+      N1 <- stats[[g]]$cN1
+      Ncell <- matrix(stats[[g]]$cN, I, ncol(eta), byrow = TRUE)
+      R <- (N1 - Ncell * P) * masks[[g]]
+      W <- Ncell * P * (1 - P) * masks[[g]]
+      TH <- covs[[g]]
+      ga <- ga + rowSums(R * TH);        gb <- gb + rowSums(R)
+      haa <- haa + rowSums(W * TH * TH); hab <- hab + rowSums(W * TH)
+      hbb <- hbb + rowSums(W)
+    }
+    det <- haa * hbb - hab^2
+    upd <- ok & det > 1e-10
+    da <- db <- numeric(I)
+    da[upd] <- (hbb[upd] * ga[upd] - hab[upd] * gb[upd]) / det[upd]
+    db[upd] <- (haa[upd] * gb[upd] - hab[upd] * ga[upd]) / det[upd]
+    fac <- rep(1, I)
+    for (h in seq_len(6L)) {
+      a2 <- clamp(a + fac * da, 0.01, 15)
+      b2 <- clamp(b + fac * db, -30, 30)
+      Qnew <- qitems(a2, b2)
+      worse <- upd & (Qnew < Qcur - 1e-10) & fac > 0
+      if (!any(worse)) break
+      fac[worse] <- if (h == 6L) 0 else fac[worse] / 2
+    }
+    a <- clamp(a + fac * da, 0.01, 15)
+    b <- clamp(b + fac * db, -30, 30)
+    Qcur <- qitems(a, b)
+  }
+  par$a <- a; par$b <- b
+  par
+}
+
 mstep <- function(par, spec, quad, stats) {
   G <- spec$G; I <- spec$I
   model <- spec$model
 
-  ## --- item block (per item; small nlminb problems) -----------------
-  extra_d <- model == "2pdm"
-  for (i in seq_len(I)) {
-    has_d <- extra_d && i > spec$i0
-    xi0 <- c(par$a[i], par$b[i], if (has_d) par$d[i - spec$i0, ])
-    negQ <- function(xi) {
-      s <- 0
-      for (g in seq_len(G)) {
-        eta <- eta_item_g(i, xi[1L], xi[2L],
-                          d_ig = if (has_d) xi[2L + g],
-                          par = par, spec = spec, g = g,
-                          cl = stats[[g]]$cl)
-        n1 <- stats[[g]]$cN1[i, ]
-        s <- s + sum(n1 * log_p_logis(eta) +
-                     (stats[[g]]$cN - n1) * log_q_logis(eta))
+  ## --- item block ---------------------------------------------------
+  par <- newton_items(par, spec, stats)
+  if (model == "2pdm") {
+    ## post-switch items carry class-specific decrements d_ig: small
+    ## nlminb problems per item
+    for (i in (spec$i0 + 1L):I) {
+      xi0 <- c(par$a[i], par$b[i], par$d[i - spec$i0, ])
+      negQ <- function(xi) {
+        s <- 0
+        for (g in seq_len(G)) {
+          eta <- eta_item_g(i, xi[1L], xi[2L], d_ig = xi[2L + g],
+                            par = par, spec = spec, g = g,
+                            cl = stats[[g]]$cl)
+          n1 <- stats[[g]]$cN1[i, ]
+          s <- s + sum(n1 * log_p_logis(eta) +
+                       (stats[[g]]$cN - n1) * log_q_logis(eta))
+        }
+        -s
       }
-      -s
+      opt <- nlminb(xi0, negQ,
+                    lower = c(0.01, -30, rep(-30, G)),
+                    upper = c(15, 30, rep(10, G)))
+      par$a[i] <- opt$par[1L]
+      par$b[i] <- opt$par[2L]
+      par$d[i - spec$i0, ] <- opt$par[-(1:2)]
     }
-    lo <- c(0.01, -30, rep(-30, length(xi0) - 2L))
-    hi <- c(15, 30, rep(10, length(xi0) - 2L))
-    opt <- nlminb(xi0, negQ, lower = lo, upper = hi)
-    par$a[i] <- opt$par[1L]
-    par$b[i] <- opt$par[2L]
-    if (has_d) par$d[i - spec$i0, ] <- opt$par[-(1:2)]
   }
 
   ## --- HYBRID common aberrant intercept (closed form) ---------------

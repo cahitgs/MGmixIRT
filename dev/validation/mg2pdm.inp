@@ -1,0 +1,48 @@
+TITLE: multigroup 2PDM validation
+DATA: FILE = sim2pdm.dat;
+VARIABLE:
+NAMES = grp i1-i15;
+USEVARIABLES = i1-i15;
+CATEGORICAL = i1-i15;
+KNOWNCLASS = g (grp = 0 1);
+CLASSES = g (2) c (2);
+ANALYSIS:
+TYPE = MIXTURE;
+STARTS = 100 20;
+PROCESSORS = 8;
+ALGORITHM = INTEGRATION;
+INTEGRATION = GAUSSHERMITE(31);
+ADAPTIVE = OFF;
+MODEL:
+%OVERALL%
+theta BY i1-i15* (s1-s15);
+[i1$1-i15$1*] (t1-t15);
+theta@1;
+[theta@0];
+c ON g;
+%G#1.C#1%
+theta BY i1-i15* (s1-s15);
+[i1$1-i10$1*] (t1-t10);
+[i11$1-i15$1*] (td1_11-td1_15);
+theta@1;
+[theta*] (mdec1);
+%G#1.C#2%
+theta BY i1-i15* (s1-s15);
+[i1$1-i15$1*] (t1-t15);
+theta@1;
+[theta@0];
+%G#2.C#1%
+theta BY i1-i15* (s1-s15);
+[i1$1-i10$1*] (t1-t10);
+[i11$1-i15$1*] (td2_11-td2_15);
+theta* (v2);
+[theta*] (mdec2);
+%G#2.C#2%
+theta BY i1-i15* (s1-s15);
+[i1$1-i15$1*] (t1-t15);
+theta* (v2);
+[theta*] (mnd2);
+MODEL CONSTRAINT:
+td1_11 > t11; td1_12 > t12; td1_13 > t13; td1_14 > t14; td1_15 > t15;
+td2_11 > t11; td2_12 > t12; td2_13 > t13; td2_14 > t14; td2_15 > t15;
+OUTPUT: TECH1;
