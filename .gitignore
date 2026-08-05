@@ -11,3 +11,6 @@ inst/doc
 *.dgm
 *.gh5
 *_results.dat
+dev/simulation/results/
+dev/simulation/pilot.log
+inst/doc

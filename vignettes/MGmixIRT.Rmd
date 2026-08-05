@@ -1,0 +1,139 @@
+---
+title: "Multigroup mixture models for performance decline with MGmixIRT"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Multigroup mixture models for performance decline with MGmixIRT}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+set.seed(1)
+```
+
+## Background
+
+In low-stakes educational assessments some test takers do not sustain
+effort to the end of the test: the probability of a correct response
+drops for end-of-test items. Ignoring this *performance decline* (PD)
+biases item parameters and understates proficiency, and — because groups
+can differ in how many students show PD — it can distort group
+comparisons, the core product of large-scale assessment programmes
+(List, Robitzsch, Lüdtke, Köller, & Nagy, 2017).
+
+**MGmixIRT** estimates the three mixture IRT models of PD compared by
+List et al. (2017), each extended to $G \ge 2$ known groups:
+
+* **2PDM** (Bolt, Cohen, & Wollack, 2002): one decline class per group;
+  after a pre-specified switching point $i_0$, item intercepts drop.
+* **HYBRID** (Yamamoto, 1995): each item position is a potential
+  switching point; after it, responses no longer depend on ability.
+* **MPDM** (Jin & Wang, 2014): after the switching point ability is
+  reduced by a decrement that grows the earlier the onset.
+
+In the multiclass models the decline-class probabilities follow the
+parsimonious shape-parameter function of Cao and Stokes (2008), with a
+group-specific shape $\omega_g$ and no-decline proportion $\pi_{Ig}$;
+class-specific ability means follow a linear function with slope
+$\rho_g$. The reference (first) group's no-decline ability distribution
+is standardised for identification.
+
+## Quick start
+
+Simulate two groups with different amounts of decline and fit the
+generating model:
+
+```{r fit}
+library(MGmixIRT)
+sim <- sim_mgmixirt("hybrid", n = c(400, 400), I = 8,
+                    pi_nd = c(0.50, 0.70), omega = c(2, 3),
+                    btilde = c(-2.5, -2.5), mu_nd = c(0, 0.4),
+                    rho = c(-0.05, -0.05), seed = 7)
+fit <- mgmixirt(sim$resp, sim$group, model = "hybrid", quadpts = 9,
+                starts = c(2, 6), maxit = 600, tol = 1e-4, seed = 1,
+                verbose = FALSE)
+fit
+```
+
+Person-level output — EAP abilities, posterior class probabilities, and
+the paper's no-PD/PD classification rule:
+
+```{r scores}
+sc <- scores(fit)
+head(sc, 3)
+table(sc$pd_class, sc$group)
+```
+
+The cumulated decline-class probabilities per group (cf. List et al.,
+2017, Fig. 2):
+
+```{r classprob, fig.width = 6, fig.height = 4}
+plot(fit, type = "classprob")
+```
+
+## Is there decline at all? Model comparison
+
+The `"2pl"` baseline (no mixture) makes the question testable:
+
+```{r ic}
+fit0 <- mgmixirt(sim$resp, sim$group, model = "2pl", quadpts = 9,
+                 starts = c(2, 6), maxit = 400, tol = 1e-4, seed = 1,
+                 verbose = FALSE)
+c(AIC_2pl = AIC(fit0), AIC_hybrid = AIC(fit))
+c(BIC_2pl = BIC(fit0), BIC_hybrid = BIC(fit))
+```
+
+Note that BIC penalises the mixture heavily; in short tests with
+moderate decline it can prefer the 2PL even when decline is present
+(cf. Sen & Cohen, 2024). Reporting both criteria is good practice.
+
+## Group comparisons with standard errors
+
+`vcov()` computes the observed-information covariance matrix
+numerically and `wald_test()` reports natural-scale group parameters
+with standard errors and Wald tests of group equality (the analogue of
+Table 2 in List et al., 2017):
+
+```{r wald}
+wt <- wald_test(fit)
+print(wt, digits = 2)
+```
+
+## Cross-validation against Mplus
+
+`mplus_syntax()` writes the full Mplus input for the fitted model —
+the same specification that otherwise requires one model block per
+group-by-class combination:
+
+```{r mplus}
+syntax <- mplus_syntax(fit, data_file = "mydata.dat")
+cat(substr(syntax, 1, 420), "...\n")
+```
+
+The package's estimates have been validated against Mplus 8.3 on
+simulated two-group 2PDM data (log-likelihoods agreeing to 0.03 units,
+all identified parameters to < 0.03; see the package repository for the
+validation artifacts).
+
+## References
+
+Bolt, D. M., Cohen, A. S., & Wollack, J. A. (2002). Item parameter
+estimation under conditions of test speededness. *Journal of
+Educational Measurement, 39*, 331–348.
+
+Cao, J., & Stokes, S. L. (2008). Bayesian IRT guessing models for
+partial guessing behaviors. *Psychometrika, 73*, 209–230.
+
+Jin, K.-Y., & Wang, W.-C. (2014). Item response theory models for
+performance decline during testing. *Journal of Educational
+Measurement, 51*, 178–200.
+
+List, M. K., Robitzsch, A., Lüdtke, O., Köller, O., & Nagy, G. (2017).
+Performance decline in low-stakes educational assessments: Different
+mixture modeling approaches. *Large-scale Assessments in Education, 5*,
+15.
+
+Yamamoto, K. (1995). *Estimating the effects of test length and test
+time on parameter estimation using the HYBRID model* (ETS Research
+Report RR-95-2). Educational Testing Service.

@@ -56,7 +56,7 @@ fit_one <- function(sim, cell, fm, seed) {
   tol <- if (cell$I <= 20) 1e-5 else 1e-4
   t0 <- proc.time()
   fit <- try(mgmixirt(sim$resp, sim$group, model = fm, switch_point = i0,
-                      quadpts = 13, starts = c(3, 10), maxit = 3000,
+                      quadpts = 13, starts = c(3, 10), maxit = 4000,
                       tol = tol, seed = seed, verbose = FALSE),
              silent = TRUE)
   el <- (proc.time() - t0)[["elapsed"]]
