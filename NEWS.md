@@ -1,4 +1,4 @@
-# MGmixIRT (development version)
+# MGmixIRT 0.0.0.9000
 
 * Initial development version: multigroup 2PDM, HYBRID, and MPDM estimation by
   MML-EM with Gauss-Hermite quadrature; data simulation for all three models.

@@ -19,9 +19,9 @@ Description: Estimation of multigroup mixture item response theory models for
 License: GPL (>= 3)
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
-Imports: stats
+Imports: stats, graphics
 Suggests: testthat (>= 3.0.0), numDeriv
 Config/testthat/edition: 3
-RoxygenNote: 7.3.2
 URL: https://github.com/cahitgs/MGmixIRT
 BugReports: https://github.com/cahitgs/MGmixIRT/issues
+Config/roxygen2/version: 8.0.0

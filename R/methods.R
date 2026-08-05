@@ -19,6 +19,9 @@ coef.mgmixirt <- function(object, ...) {
   }
   gl <- object$group_levels
   groups <- switch(spec$model,
+    "2pl" = data.frame(
+      row.names = gl,
+      mu_nd = par$mu_nd, sigma = exp(par$logsigma)),
     "2pdm" = data.frame(
       row.names = gl,
       p_decline = plogis(par$logit_pdec),
@@ -46,7 +49,8 @@ coef.mgmixirt <- function(object, ...) {
 print.mgmixirt <- function(x, ...) {
   hdr <- c("2pdm" = "two-class mixture PD model (Bolt et al., 2002)",
            "hybrid" = "HYBRID model (Yamamoto, 1995)",
-           "mpdm" = "multiclass mixture PD model (Jin & Wang, 2014)")
+           "mpdm" = "multiclass mixture PD model (Jin & Wang, 2014)",
+           "2pl" = "2PL model (no mixture)")
   cat("Multigroup", hdr[[x$model]], "\n")
   if (x$model == "2pdm")
     cat("Switching point i0 =", x$spec$i0, "\n")

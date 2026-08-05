@@ -4,7 +4,8 @@
 #' or MPDM (List et al., 2017). Group sizes and group-specific structural
 #' parameters are supplied as vectors with one element per group.
 #'
-#' @param model One of \code{"2pdm"}, \code{"hybrid"}, \code{"mpdm"}.
+#' @param model One of \code{"2pdm"}, \code{"hybrid"}, \code{"mpdm"}, or
+#'   \code{"2pl"} (no decline classes).
 #' @param n Integer vector of group sample sizes.
 #' @param I Number of items.
 #' @param a,b Item slopes and intercepts (length \code{I}). Defaults:
@@ -28,7 +29,7 @@
 #'   \code{group}, the true switching points \code{delta}, abilities
 #'   \code{theta}, and the generating parameters \code{truth}.
 #' @export
-sim_mgmixirt <- function(model = c("2pdm", "hybrid", "mpdm"),
+sim_mgmixirt <- function(model = c("2pdm", "hybrid", "mpdm", "2pl"),
                          n, I, a = NULL, b = NULL,
                          switch_point = NULL, pdec = NULL, dshift = 1,
                          pi_nd = NULL, omega = NULL,
@@ -49,7 +50,7 @@ sim_mgmixirt <- function(model = c("2pdm", "hybrid", "mpdm"),
     if (is.null(mu_dec)) mu_dec <- mu_nd
     if (!is.matrix(dshift))
       dshift <- matrix(dshift, I - spec$i0, G)
-  } else {
+  } else if (model != "2pl") {
     if (is.null(pi_nd)) pi_nd <- rep(0.8, G)
     if (is.null(omega)) omega <- rep(5, G)
     if (is.null(rho)) rho <- rep(0, G)
@@ -65,6 +66,8 @@ sim_mgmixirt <- function(model = c("2pdm", "hybrid", "mpdm"),
   for (g in seq_len(G)) {
     if (model == "2pdm") {
       pi_g <- c(pdec[g], 1 - pdec[g])
+    } else if (model == "2pl") {
+      pi_g <- 1
     } else {
       i <- seq_len(I - 1L)
       pi_dec <- (i^omega[g] - (i - 1)^omega[g]) / (I - 1)^omega[g] *
@@ -72,6 +75,7 @@ sim_mgmixirt <- function(model = c("2pdm", "hybrid", "mpdm"),
       pi_g <- c(pi_dec, pi_nd[g])
     }
     mu_g <- if (model == "2pdm") c(mu_dec[g], mu_nd[g])
+            else if (model == "2pl") mu_nd[g]
             else mu_nd[g] + rho[g] * (I - spec$deltas)
     for (p in seq_len(n[g])) {
       row <- row + 1L

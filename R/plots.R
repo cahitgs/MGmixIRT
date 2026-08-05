@@ -23,6 +23,8 @@
 plot.mgmixirt <- function(x, type = c("classprob", "items", "decline"),
                           ...) {
   type <- match.arg(type)
+  if (x$model == "2pl" && type != "items")
+    stop("only type = \"items\" is available for model \"2pl\"")
   spec <- x$spec; G <- spec$G; I <- spec$I
   gl <- x$group_levels
   co <- coef(x)
@@ -38,7 +40,9 @@ plot.mgmixirt <- function(x, type = c("classprob", "items", "decline"),
     } else {
       s <- seq_len(I - 1)
       cum <- sapply(seq_len(G), function(g) {
-        pi_g <- probs_from_logits(group_class_logits(x$par, spec, g))
+        pi_g <- probs_from_logits(
+          class_logits_g(x$model, I, tau1 = x$par$tau1[g],
+                         logomega = x$par$logomega[g]))
         cumsum(pi_g[s])
       })
       graphics::matplot(s, cum, type = "s", lty = 1, lwd = 2, col = cols,
@@ -71,7 +75,7 @@ plot.mgmixirt <- function(x, type = c("classprob", "items", "decline"),
                        col = c(1, seq_len(G) + 1),
                        pch = c(19, rep(17, G)), bty = "n")
     } else if (x$model == "hybrid") {
-      graphics::barplot(co$groups$p_aberrant, names.arg = gl,
+      graphics::barplot(stats::plogis(co$groups$btilde), names.arg = gl,
                         ylab = "P(correct) after switching point",
                         xlab = "Group", ...)
     } else {

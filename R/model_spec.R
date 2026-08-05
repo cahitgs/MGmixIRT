@@ -12,12 +12,14 @@
 ## free decline-class mean per group.
 
 mgm_spec <- function(model, I, G, i0 = NULL) {
-  model <- match.arg(model, c("2pdm", "hybrid", "mpdm"))
+  model <- match.arg(model, c("2pdm", "hybrid", "mpdm", "2pl"))
   if (model == "2pdm") {
     if (is.null(i0)) stop("switch_point (i0) is required for model = \"2pdm\"")
     i0 <- as.integer(i0)
     if (i0 < 1L || i0 >= I) stop("switch_point must lie in 1, ..., I-1")
     deltas <- c(i0, I)
+  } else if (model == "2pl") {
+    deltas <- I                             # everyone in the no-decline class
   } else {
     deltas <- seq_len(I)
   }
@@ -29,6 +31,8 @@ mgm_spec <- function(model, I, G, i0 = NULL) {
 theta_means_g <- function(par, spec, g) {
   if (spec$model == "2pdm") {
     c(par$mu_dec[g], par$mu_nd[g])
+  } else if (spec$model == "2pl") {
+    par$mu_nd[g]
   } else {
     par$mu_nd[g] + par$rho[g] * (spec$I - spec$deltas)
   }
@@ -89,6 +93,7 @@ mgm_npar <- function(spec) {
   I <- spec$I; G <- spec$G
   base <- 2L * I + 2L * (G - 1L)              # a, b, mu_nd (non-ref), sigma (non-ref)
   switch(spec$model,
+    "2pl"    = base,
     "2pdm"   = base + (I - spec$i0) * G + G + G,   # d, mu_dec, pdec
     "hybrid" = base + G + G + 2L * G,              # btilde, rho, tau1 + omega
     "mpdm"   = base + G + G + 2L * G)              # kappa, rho, tau1 + omega

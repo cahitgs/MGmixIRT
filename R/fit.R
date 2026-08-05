@@ -14,7 +14,9 @@
 #' @param group Factor (or vector coercible to one) of manifest group
 #'   membership, one entry per row of \code{resp}. \code{NULL} fits a
 #'   single-group model.
-#' @param model One of \code{"2pdm"}, \code{"hybrid"}, \code{"mpdm"}.
+#' @param model One of \code{"2pdm"}, \code{"hybrid"}, \code{"mpdm"}, or
+#'   \code{"2pl"} (standard multigroup 2PL without a mixture component,
+#'   as the baseline for information-criterion comparisons).
 #' @param switch_point 2PDM only: the pre-specified switching point
 #'   \code{i0} (responses up to item \code{i0} are unaffected by decline).
 #'   A vector of candidate values triggers a grid search; the model with
@@ -31,7 +33,7 @@
 #' @return An object of class \code{"mgmixirt"}.
 #' @export
 mgmixirt <- function(resp, group = NULL,
-                     model = c("2pdm", "hybrid", "mpdm"),
+                     model = c("2pdm", "hybrid", "mpdm", "2pl"),
                      switch_point = NULL, quadpts = 15,
                      starts = c(10, 20), maxit = 2000, tol = 1e-5,
                      seed = NULL, verbose = TRUE) {
@@ -106,8 +108,9 @@ mgmixirt <- function(resp, group = NULL,
     post[[g]] <- matrix(P, ncol = spec$nclass)
   }
   Pall <- do.call(rbind, post)
-  ent <- 1 - sum(-Pall * log(pmax(Pall, 1e-300))) /
-    (nrow(Pall) * log(spec$nclass))
+  ent <- if (spec$nclass == 1L) NA_real_ else
+    1 - sum(-Pall * log(pmax(Pall, 1e-300))) /
+      (nrow(Pall) * log(spec$nclass))
 
   structure(list(call = cl_call, model = model, spec = spec,
                  par = run$par, logLik = run$ll, npar = mgm_npar(spec),

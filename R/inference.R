@@ -12,7 +12,11 @@ pack_par <- function(par, spec) {
   x <- c(setNames(par$a, paste0("a", seq_len(I))),
          setNames(par$b, paste0("b", seq_len(I))))
   gl <- seq_len(G)
-  if (spec$model == "2pdm") {
+  if (spec$model == "2pl") {
+    if (G > 1L)
+      x <- c(x, setNames(par$mu_nd[-1L], paste0("mu_nd_g", gl[-1L])),
+             setNames(par$logsigma[-1L], paste0("logsigma_g", gl[-1L])))
+  } else if (spec$model == "2pdm") {
     dn <- as.vector(outer((spec$i0 + 1L):I, gl,
                           function(i, g) paste0("d", i, "_g", g)))
     x <- c(x, setNames(as.vector(par$d), dn),
@@ -42,7 +46,9 @@ unpack_par <- function(x, spec, template) {
   par$a <- unname(x[paste0("a", seq_len(I))])
   par$b <- unname(x[paste0("b", seq_len(I))])
   gl <- seq_len(G)
-  if (spec$model == "2pdm") {
+  if (spec$model == "2pl") {
+    ## nothing beyond items and the shared tail handled below
+  } else if (spec$model == "2pdm") {
     dn <- as.vector(outer((spec$i0 + 1L):I, gl,
                           function(i, g) paste0("d", i, "_g", g)))
     par$d <- matrix(unname(x[dn]), I - spec$i0, G)
@@ -68,12 +74,16 @@ natural_par <- function(x, spec, template) {
   par <- unpack_par(x, spec, template)
   G <- spec$G; gl <- seq_len(G)
   out <- c()
-  if (spec$model == "2pdm") {
+  if (spec$model == "2pl") {
+    ## only the shared tail below
+  } else if (spec$model == "2pdm") {
     out <- c(setNames(plogis(par$logit_pdec), paste0("p_decline_g", gl)),
              setNames(par$mu_dec, paste0("mu_dec_g", gl)))
   } else {
     pi_nd <- vapply(gl, function(g)
-      probs_from_logits(group_class_logits(par, spec, g))[spec$nclass],
+      probs_from_logits(class_logits_g(spec$model, spec$I,
+                                       tau1 = par$tau1[g],
+                                       logomega = par$logomega[g]))[spec$nclass],
       numeric(1))
     out <- c(setNames(pi_nd, paste0("pi_nd_g", gl)),
              setNames(exp(par$logomega), paste0("omega_g", gl)),

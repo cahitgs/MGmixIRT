@@ -10,7 +10,9 @@
 ## (generalised EM).
 
 group_class_logits <- function(par, spec, g) {
-  if (spec$model == "2pdm") {
+  if (spec$model == "2pl") {
+    0
+  } else if (spec$model == "2pdm") {
     class_logits_g("2pdm", spec$I, logit_pdec = par$logit_pdec[g])
   } else {
     class_logits_g(spec$model, spec$I, tau1 = par$tau1[g],
@@ -173,11 +175,13 @@ mstep <- function(par, spec, quad, stats) {
   ## --- ability distribution block (per group) -----------------------
   for (g in seq_len(G)) {
     fields <- switch(model,
+      "2pl"    = if (g > 1L) c("mu_nd", "logsigma"),
       "2pdm"   = c("mu_dec", if (g > 1L) c("mu_nd", "logsigma")),
       "hybrid" = c("rho",    if (g > 1L) c("mu_nd", "logsigma")),
       "mpdm"   = c("rho", "logkappa", if (g > 1L) c("mu_nd", "logsigma")))
+    if (length(fields) == 0L) next
     psi0 <- vapply(fields, function(f) par[[f]][g], numeric(1))
-    negQ <- function(psi) {
+    negQ_dist <- function(psi) {
       p2 <- par
       for (k in seq_along(fields)) p2[[fields[k]]][g] <- psi[k]
       cl <- cells_g(p2, spec, g, quad)
@@ -187,11 +191,12 @@ mstep <- function(par, spec, quad, stats) {
           ifelse(fields == "logkappa", log(1e-4), -10))
     hi <- ifelse(fields == "logsigma", log(10),
           ifelse(fields == "logkappa", log(10), 10))
-    opt <- nlminb(psi0, negQ, lower = lo, upper = hi)
+    opt <- nlminb(psi0, negQ_dist, lower = lo, upper = hi)
     for (k in seq_along(fields)) par[[fields[k]]][g] <- opt$par[k]
   }
 
   ## --- class probability block --------------------------------------
+  if (model == "2pl") return(par)
   for (g in seq_len(G)) {
     Q <- stats[[g]]$cl$Q
     m <- colSums(matrix(stats[[g]]$cN, nrow = Q))
@@ -199,11 +204,11 @@ mstep <- function(par, spec, quad, stats) {
       p_dec <- clamp(m[1L] / sum(m), 1e-8, 1 - 1e-8)
       par$logit_pdec[g] <- qlogis(p_dec)
     } else {
-      negQ <- function(psi) {
+      negQ_cls <- function(psi) {
         tau <- class_logits_g(model, I, tau1 = psi[1L], logomega = psi[2L])
         -sum(m * log(probs_from_logits(tau)))
       }
-      opt <- nlminb(c(par$tau1[g], par$logomega[g]), negQ,
+      opt <- nlminb(c(par$tau1[g], par$logomega[g]), negQ_cls,
                     lower = c(-30, log(0.05)), upper = c(30, log(50)))
       par$tau1[g] <- opt$par[1L]
       par$logomega[g] <- opt$par[2L]
@@ -252,7 +257,7 @@ start_par <- function(spec, Xg, quad) {
     par$d <- matrix(log(0.7), I - spec$i0, G)
     par$mu_dec <- mu_nd - 0.1
     par$logit_pdec <- rep(qlogis(0.15), G)
-  } else {
+  } else if (spec$model != "2pl") {
     par$rho <- rep(-0.02, G)
     par$tau1 <- rep(tau1_from_target(0.8, 5, I), G)
     par$logomega <- rep(log(5), G)
@@ -271,7 +276,7 @@ jitter_par <- function(par, spec) {
     par$d <- par$d + rnorm(length(par$d), 0, 0.3)
     par$mu_dec <- par$mu_dec + rnorm(G, 0, 0.3)
     par$logit_pdec <- par$logit_pdec + rnorm(G, 0, 0.5)
-  } else {
+  } else if (spec$model != "2pl") {
     par$rho <- par$rho + rnorm(G, 0, 0.02)
     par$tau1 <- par$tau1 + rnorm(G, 0, 0.5)
     par$logomega <- par$logomega + rnorm(G, 0, 0.3)
